@@ -87,16 +87,36 @@ ai_run() {
     # 设置清理trap
     trap "cleanup_temp_files '$cmd_file' '$result_file'" EXIT
 
-    # 创建命令JSON文件
-    cat > "$cmd_file" << EOF
+    # 创建命令JSON文件 - 使用jq进行正确转义
+    if command -v jq >/dev/null 2>&1; then
+        # 有jq，使用jq创建正确转义的JSON
+        jq -n \
+            --arg id "$order_id" \
+            --arg command "$cmd" \
+            --arg timestamp "$(date -Iseconds)" \
+            --argjson timeout "$timeout" \
+            --argjson session_id "$session_id" \
+            '{
+                id: $id,
+                command: $command,
+                timestamp: $timestamp,
+                timeout: $timeout,
+                session_id: $session_id
+            }' > "$cmd_file"
+    else
+        # 没有jq，手动转义引号
+        local escaped_cmd
+        escaped_cmd=$(echo "$cmd" | sed 's/"/\\"/g')
+        cat > "$cmd_file" << EOF
 {
     "id": "$order_id",
-    "command": "$cmd",
+    "command": "$escaped_cmd",
     "timestamp": "$(date -Iseconds)",
     "timeout": $timeout,
     "session_id": $session_id
 }
 EOF
+    fi
 
     log_debug "创建命令文件: $cmd_file"
 
