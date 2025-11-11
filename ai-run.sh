@@ -38,7 +38,7 @@ check_ssh_daemon() {
     local session_id="${SSH_SESSION:-0}"
     local pipe_in="/tmp/ssh-${session_id}.in"
 
-    if [[ ! -p "$pipe_in" ]]; then
+    if [[ ! -f "$pipe_in" ]]; then
         log_error "SSH小管家未运行，管道文件不存在: $pipe_in"
         log_info "请先启动: ./ssh-start.sh <hostname> [session_id]"
         return 1
@@ -108,10 +108,12 @@ EOF
 
     # 等待结果文件出现（带超时）
     local wait_count=0
-    local max_wait=$((timeout * 2))  # 给额外时间等待文件创建
+    local max_wait=$((timeout * 10))  # 每次等待0.1秒，所以乘以10
 
+    log_debug "等待结果文件: $result_file"
     while [[ $wait_count -lt $max_wait ]]; do
         if [[ -f "$result_file" && -s "$result_file" ]]; then
+            log_debug "结果文件已准备好，大小: $(wc -c < "$result_file") 字节"
             break
         fi
         sleep 0.1
@@ -204,7 +206,11 @@ main() {
     fi
 
     # 执行主函数
-    ai_run "$@"
+    ai_run "$@" || {
+        local exit_code=$?
+        log_error "ai-run 执行失败，退出码: $exit_code"
+        return $exit_code
+    }
 }
 
 # 如果直接执行脚本（不是source）
